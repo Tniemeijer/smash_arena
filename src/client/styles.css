@@ -1,0 +1,530 @@
+/* Same chunky pixel-art interface as the lab game next door, moved from daylight and cream to
+   torchlight and stone: the palette is iron, rust and candleflame instead of panel wood. Every
+   measurement is in whole pixels and nothing is anti-aliased, so the UI sits on the low-res 3D
+   pass without either one looking out of place against the other. */
+:root {
+    --panel: #2a2622;
+    --panel-2: #201d1a;
+    --ink: #e8dcc6;
+    --edge: #0f0d0b;
+    --edge-lite: #4a413a;
+    --btn: #3a332c;
+    --btn-hi: #4e453b;
+    --gold: #d9a441;
+    --red: #b4392f;
+    --green: #5c8f3a;
+    --blue: #4a7fa8;
+    --bar-hp: #b4392f;
+    --bar-xp: #d9a441;
+}
+
+html, body {
+    height: 100%; width: 100%; overflow: hidden; margin: 0;
+    background: #08090b; color: var(--ink);
+    font-family: "Courier New", ui-monospace, monospace;
+    font-weight: 700; -webkit-font-smoothing: none;
+    user-select: none; cursor: crosshair;
+}
+#canvas-container { position: absolute; inset: 0; z-index: 0; }
+#lab-canvas, canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edges; }
+
+/* The HUD never eats a click meant for the dungeon -- aiming and attacking happen through it. */
+#hud { position: absolute; inset: 0; z-index: 10; pointer-events: none; }
+#hud button { pointer-events: auto; cursor: pointer; }
+
+.dim { opacity: 0.65; }
+
+/* ---- vitals ---- */
+#vitals {
+    position: absolute; top: 10px; left: 10px; width: 210px;
+    background: var(--panel); border: 3px solid var(--edge);
+    box-shadow: inset 0 0 0 2px var(--edge-lite); padding: 7px 9px;
+}
+.v-top { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 5px; }
+#v-class { color: var(--gold); }
+.bar { position: relative; height: 13px; background: #14120f; border: 2px solid var(--edge); margin-top: 3px; }
+.bar i { display: block; height: 100%; width: 100%; }
+.bar.hp i { background: var(--bar-hp); }
+.bar.xp { height: 6px; }
+.bar.xp i { background: var(--bar-xp); }
+.bar span {
+    position: absolute; inset: 0; text-align: center; font-size: 10px; line-height: 13px;
+    text-shadow: 1px 1px 0 #000;
+}
+
+/* ---- depth ---- */
+#depth {
+    position: absolute; top: 10px; right: 10px; text-align: right;
+    background: var(--panel); border: 3px solid var(--edge);
+    box-shadow: inset 0 0 0 2px var(--edge-lite); padding: 7px 10px; font-size: 13px;
+}
+#d-left { font-size: 11px; margin-top: 2px; }
+
+/* ---- skills ---- */
+#skillbar { position: absolute; bottom: 34px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; }
+.slot {
+    position: relative; width: 44px; height: 44px;
+    background: var(--panel); border: 3px solid var(--edge);
+    box-shadow: inset 0 0 0 2px var(--edge-lite);
+}
+/* The cooldown wipe fills from the bottom, so a full square means ready. */
+.slot i { position: absolute; left: 0; right: 0; bottom: 0; height: 0%; background: rgba(0,0,0,0.66); }
+.slot.ready { box-shadow: inset 0 0 0 2px var(--gold); }
+.slot .k { position: absolute; bottom: -1px; right: 2px; font-size: 9px; text-shadow: 1px 1px 0 #000; }
+/* A move square carries its name, clipped, because four unlabelled boxes are four guesses. */
+.slot.move { width: 52px; }
+.slot.move .n {
+    position: absolute; inset: 4px 2px auto 2px; font-size: 8px; line-height: 1.15;
+    text-align: center; overflow: hidden; max-height: 20px;
+    text-shadow: 1px 1px 0 #000; color: var(--gold);
+}
+.slot.move { border-color: #3a332b; }
+.slot.move.empty { opacity: 0.4; }
+.slot.move.empty .k { opacity: 0.7; }
+
+/* What a move has done to you, while it lasts. */
+#buffs {
+    position: absolute; bottom: 104px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 6px; pointer-events: none;
+}
+.buff {
+    background: var(--panel); border: 2px solid var(--gold); padding: 2px 7px; font-size: 10px;
+    color: var(--gold);
+}
+.buff i { font-style: normal; opacity: 0.7; margin-left: 3px; }
+.buff.bad { color: #ff8c3a; border-color: #7a3a1a; }
+.buff.cold { color: #bfe2f4; border-color: #3f6a86; }
+.buff.good { color: #9fd06a; border-color: #3f6a2a; }
+/* The attack's rhythm: pips along the top of its square, and the square lights when the next
+   swing is the big one. */
+.slot .pips { position: absolute; top: -9px; left: 0; right: 0; display: flex; justify-content: center; gap: 3px; }
+.slot .pips u { width: 7px; height: 5px; background: #2a241f; border: 1px solid #5a4e40; }
+.slot .pips u.on { background: #d9a441; border-color: #f2d27a; }
+.slot.primed { border-color: #d9a441; box-shadow: inset 0 0 0 2px #f2d27a, 0 0 8px #d9a44199; }
+
+#hint {
+    position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+    font-size: 11px; opacity: 0.5; white-space: nowrap;
+}
+#toast {
+    position: absolute; bottom: 178px; left: 50%; transform: translateX(-50%);
+    display: flex; flex-direction: column; align-items: center; gap: 4px; pointer-events: none;
+}
+.toast-item {
+    background: var(--panel); border: 3px solid var(--edge); padding: 4px 10px; font-size: 12px;
+    box-shadow: inset 0 0 0 2px var(--edge-lite);
+}
+.toast-item.bad { color: var(--red); }
+.toast-item.good { color: var(--gold); }
+
+/* ---- floating combat numbers ---- */
+.dmg {
+    position: absolute; font-size: 13px; pointer-events: none; z-index: 12;
+    text-shadow: 2px 2px 0 #000; transform: translate(-50%, -50%);
+}
+.dmg.hit { color: #f2e6cd; }
+.dmg.crit { color: var(--gold); font-size: 17px; }
+.dmg.hurt { color: var(--red); }
+.dmg.heal { color: #8fbf5a; }
+.dmg.burn { color: #ff8c3a; }
+
+/* ---- class select / death ---- */
+#screen {
+    position: absolute; inset: 0; z-index: 90;
+    /* Centred with auto margins on the child rather than with align-items: centring a flex item
+       taller than its scroll container pushes its top ABOVE the scroll origin, where nothing can
+       reach it. That is what hid the name and the whole appearance block once creation grew a
+       skill tree and a list of moves. */
+    display: flex; align-items: flex-start; justify-content: center;
+    background: rgba(6, 7, 9, 0.88); overflow-y: auto; padding: 16px;
+}
+#screen[hidden] { display: none; }
+#screen button { font-family: inherit; font-weight: 700; color: var(--ink); }
+.sc-inner {
+    width: min(760px, 100%); margin: auto; text-align: center;
+    background: var(--panel); border: 3px solid var(--edge);
+    box-shadow: inset 0 0 0 2px var(--edge-lite); padding: 20px 18px;
+}
+.sc-inner h1 { font-size: 30px; margin: 0 0 6px; letter-spacing: 2px; color: var(--gold); }
+.sc-tag { font-size: 12px; margin: 0 0 16px; line-height: 1.6; }
+.classes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.cls {
+    background: var(--panel-2); border: 2px solid var(--edge); padding: 10px 8px;
+    text-align: left; cursor: pointer;
+}
+.cls:hover { background: var(--btn-hi); }
+.cls b { display: block; font-size: 14px; color: var(--gold); margin-bottom: 4px; }
+.cls .role { display: block; font-size: 10px; opacity: 0.8; margin-bottom: 6px; }
+.cls .stat { display: flex; justify-content: space-between; font-size: 10px; opacity: 0.9; }
+.sc-foot { font-size: 10px; opacity: 0.6; margin-top: 14px; line-height: 1.6; }
+.sc-score { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin: 12px 0; }
+.sc-score span {
+    display: flex; justify-content: space-between; gap: 8px; font-size: 11px;
+    background: var(--panel-2); border: 2px solid var(--edge); padding: 4px 8px;
+}
+.sc-again {
+    display: block; width: 100%; padding: 10px; font-size: 14px; margin-top: 8px;
+    background: var(--gold); border: 2px solid var(--edge); color: #201d1a;
+}
+.sc-again:hover { background: #f0bb58; }
+@media (max-width: 640px) {
+    .classes { grid-template-columns: repeat(2, 1fr); }
+    .sc-inner h1 { font-size: 22px; }
+}
+
+/* ---- character creation and the skill tree ---- */
+.sc-inner.create { width: min(600px, 100%); text-align: left; }
+.sc-inner.create h1, .sc-inner.create .sc-tag { text-align: center; }
+.cr-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.cr-row label { font-size: 12px; opacity: 0.8; }
+#cr-name {
+    flex: 1; font-family: inherit; font-weight: 700; font-size: 14px; color: var(--ink);
+    background: var(--panel-2); border: 2px solid var(--edge); padding: 6px 8px;
+}
+.mini {
+    background: var(--btn); border: 2px solid var(--edge); color: var(--ink);
+    font-family: inherit; font-weight: 700; font-size: 11px; padding: 3px 8px; cursor: pointer;
+}
+.mini:hover { background: var(--btn-hi); }
+.cr-row .mini { font-size: 14px; padding: 5px 9px; }
+.callings { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.calling {
+    background: var(--panel-2); border: 2px solid var(--edge); padding: 7px 6px;
+    cursor: pointer; text-align: center;
+}
+.calling:hover { background: var(--btn-hi); }
+.calling.on { background: var(--btn-hi); box-shadow: inset 0 0 0 2px var(--gold); }
+.calling b { display: block; font-size: 13px; color: var(--gold); }
+.calling span { display: block; font-size: 9px; opacity: 0.75; margin-top: 2px; }
+.cr-blurb { font-size: 11px; opacity: 0.85; margin: 8px 0 10px; line-height: 1.5; text-align: center; }
+.cr-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-bottom: 12px; }
+.cr-stats span {
+    display: flex; justify-content: space-between; font-size: 10px;
+    background: var(--panel-2); border: 2px solid var(--edge); padding: 4px 6px;
+}
+.cr-stats i { font-style: normal; opacity: 0.7; }
+.cr-stats b { color: var(--gold); }
+
+.tree { border: 2px solid var(--edge); background: var(--panel-2); padding: 8px; }
+.tree-head { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px; }
+.tree-head .pts { color: var(--gold); }
+.tier { margin-bottom: 7px; }
+/* A locked tier is shown, not hidden: you should be able to see what you are working toward. */
+.tier.locked { opacity: 0.4; }
+.tier-label { font-size: 9px; opacity: 0.6; margin-bottom: 3px; text-transform: uppercase; }
+.node {
+    display: block; width: 100%; text-align: left; margin-bottom: 4px; cursor: pointer;
+    background: var(--panel); border: 2px solid var(--edge); padding: 5px 7px;
+    font-family: inherit; font-weight: 700; color: var(--ink);
+}
+.node:disabled { cursor: default; opacity: 0.55; }
+.node.can:hover { background: var(--btn-hi); }
+.node.taken { box-shadow: inset 0 0 0 2px var(--green); }
+.n-top { display: flex; justify-content: space-between; font-size: 12px; }
+.n-top b { color: var(--gold); }
+.n-top i { font-style: normal; font-size: 10px; opacity: 0.8; }
+.n-desc { display: block; font-size: 10px; opacity: 0.8; margin-top: 2px; line-height: 1.4; }
+@media (max-width: 640px) {
+    .callings, .cr-stats { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ---- vignette ---- */
+/* Darkens the corners so the eye is pulled to the middle, where the character is. Sits over the
+   canvas and under everything else, and never eats a click. */
+#hud::before {
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse at 50% 46%, rgba(0,0,0,0) 38%, rgba(0,0,0,0.55) 82%, rgba(0,0,0,0.78) 100%);
+}
+
+/* ---- the cell ---- */
+/* What is left of character creation: a face you roll, a calling you pick, and the move you walk
+   in with. The ten rows of swatches that used to live here were a screen between the player and
+   the game, and a screen between the player and the game is a screen they click past. */
+.cr-body { display: flex; gap: 14px; align-items: stretch; margin-bottom: 12px; }
+.cr-pick { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.cr-doll { flex: 0 0 176px; }
+.doll-3d {
+    width: 176px; height: 226px; background: var(--panel-2); border: 2px solid var(--edge);
+    cursor: grab; touch-action: none;
+}
+.doll-3d:active { cursor: grabbing; }
+.doll-3d canvas { display: block; }
+.cr-doll .mini.wide { margin-top: 5px; }
+
+.cr-move { border: 2px solid var(--edge); background: var(--panel-2); padding: 8px; }
+.chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.chip {
+    font-family: inherit; font-weight: 700; font-size: 11px; color: var(--ink); cursor: pointer;
+    background: var(--panel); border: 2px solid var(--edge); padding: 5px 9px;
+}
+.chip:hover { background: var(--btn-hi); }
+.chip.on { background: var(--btn-hi); box-shadow: inset 0 0 0 2px var(--gold); color: var(--gold); }
+.chip.locked { opacity: 0.35; cursor: default; }
+.chip small { font-size: 9px; font-weight: 400; margin-left: 5px; opacity: 0.9; }
+
+/* ---- choosing who goes in ---- */
+/* No fight behind the menu: the empty bars and the skill bar with nothing on it made the first
+   screen look like a broken game rather than a front door. */
+body.menu #hud { display: none; }
+#screen:has(.pick) {
+    background: radial-gradient(ellipse at 50% 38%, rgba(70, 44, 20, 0.55), rgba(6, 7, 9, 0.96) 65%);
+}
+.sc-inner.pick { width: min(780px, 100%); text-align: left; }
+.sc-inner.pick h1, .sc-inner.pick .sc-tag { text-align: center; }
+.sc-inner.pick h1 { font-size: 34px; letter-spacing: 4px; text-shadow: 0 3px 0 #5a3a12; }
+
+/* Four cards, each a portrait of YOUR prisoner in that calling's gear. */
+.cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 14px; }
+.card {
+    position: relative; cursor: pointer; padding: 6px 6px 8px; text-align: center;
+    background: var(--panel-2); border: 2px solid var(--edge);
+    box-shadow: inset 0 0 0 2px var(--edge-lite); transition: transform 0.08s;
+}
+.card:hover { background: var(--btn-hi); transform: translateY(-2px); }
+.card.on { background: var(--btn-hi); box-shadow: inset 0 0 0 2px var(--gold), 0 0 12px #d9a44155; }
+.card img {
+    display: block; width: 100%; aspect-ratio: 176 / 200; object-fit: cover; object-position: 50% 20%;
+    image-rendering: pixelated; background: #1a1714; border: 2px solid var(--edge); margin-bottom: 6px;
+}
+.card:not(.on) img { filter: saturate(0.55) brightness(0.8); }
+.card b { display: block; font-size: 14px; color: var(--gold); }
+.card span { display: block; font-size: 9px; opacity: 0.75; margin-top: 2px; line-height: 1.4; }
+.card em {
+    position: absolute; top: 9px; left: 9px; font-style: normal; font-size: 10px;
+    background: var(--edge); color: var(--ink); padding: 1px 5px; opacity: 0.8;
+}
+
+/* The four numbers as bars on one scale, so comparing callings is a glance. */
+.stats { display: grid; gap: 4px; }
+.st { display: grid; grid-template-columns: 58px 1fr 34px; align-items: center; gap: 8px; font-size: 11px; }
+.st i { font-style: normal; opacity: 0.75; }
+.st u { height: 8px; background: var(--edge); border: 1px solid var(--edge-lite); text-decoration: none; }
+.st s { display: block; height: 100%; background: var(--gold); text-decoration: none; }
+.st b { text-align: right; color: var(--gold); }
+
+/* How they fight: the rhythm, the dash and anything else worth knowing on the way in. */
+.kit { display: grid; gap: 4px; border-top: 2px solid var(--edge); padding-top: 8px; }
+.kit div { display: grid; grid-template-columns: 58px 1fr; gap: 8px; font-size: 11px; line-height: 1.45; }
+.kit i { font-style: normal; color: var(--gold); }
+
+.sc-again small { font-size: 10px; font-weight: 400; opacity: 0.6; margin-left: 8px; }
+.controls { font-size: 10px; opacity: 0.65; margin: 10px 0 0; line-height: 1.7; text-align: center; }
+.controls b { color: var(--gold); font-weight: 700; }
+
+/* A setting row on the pause screen. */
+.setting { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 12px 0 4px; font-size: 12px; }
+.setting span { opacity: 0.75; margin-right: 6px; }
+.setting .mini.on { box-shadow: inset 0 0 0 2px var(--gold); color: var(--gold); }
+
+@media (max-width: 640px) {
+    .cards { grid-template-columns: repeat(2, 1fr); }
+    .cr-body { flex-direction: column; align-items: center; }
+    .cr-pick { width: 100%; }
+}
+
+/* ---- stair prompt ---- */
+#prompt {
+    position: absolute; bottom: 140px; left: 50%; transform: translateX(-50%);
+    background: var(--panel); border: 3px solid var(--gold);
+    box-shadow: inset 0 0 0 2px var(--edge-lite); padding: 6px 12px; font-size: 13px;
+    white-space: nowrap;
+}
+#prompt[hidden] { display: none; }
+#prompt b { color: var(--gold); }
+#prompt i { font-style: normal; font-size: 11px; opacity: 0.7; }
+
+/* ---- rarity ---- */
+/* One vocabulary for how rare a thing is, used by the bag, the death screen and the toasts, so a
+   colour always means the same thing wherever it appears. */
+.t-common { color: #cfc6b0; }
+.t-rare   { color: #6fa8d4; }
+.t-fabled { color: var(--gold); text-shadow: 0 0 6px rgba(217,164,65,0.45); }
+
+/* ---- the panel's tabs ---- */
+.tabs { display: flex; gap: 6px; margin-bottom: 10px; }
+.tab {
+    flex: 1; position: relative; font-family: inherit; font-weight: 700; font-size: 12px;
+    color: var(--ink); background: var(--panel-2); border: 2px solid var(--edge);
+    padding: 7px 6px; cursor: pointer;
+}
+.tab i { font-style: normal; font-size: 9px; opacity: 0.55; margin-left: 3px; }
+.tab em {
+    position: absolute; top: -7px; right: 4px; font-style: normal; font-size: 10px;
+    background: var(--gold); color: #241f18; border: 2px solid var(--edge);
+    padding: 0 4px; font-weight: 700;
+}
+.tab.on { background: var(--btn-hi); box-shadow: inset 0 0 0 2px var(--gold); }
+
+/* ---- special moves ---- */
+.moves-note { font-size: 10px; opacity: 0.65; margin: 0 0 7px; line-height: 1.5; }
+.move {
+    border: 2px solid var(--edge); background: var(--panel); padding: 6px 8px; margin-bottom: 5px;
+}
+.move.locked { opacity: 0.45; }
+.move.known { box-shadow: inset 0 0 0 2px rgba(217,164,65,0.4); }
+.m-top { display: flex; justify-content: space-between; align-items: baseline; }
+.m-top b { font-size: 12px; color: var(--gold); }
+.m-top i { font-style: normal; font-size: 10px; opacity: 0.6; }
+.m-desc { display: block; font-size: 10px; opacity: 0.85; margin: 2px 0 5px; line-height: 1.45; }
+.m-keys { display: flex; gap: 4px; }
+.kbind, .learn {
+    font-family: inherit; font-weight: 700; font-size: 11px; color: var(--ink); cursor: pointer;
+    background: var(--panel-2); border: 2px solid var(--edge); padding: 2px 8px;
+}
+.kbind.on { background: var(--gold); color: #241f18; }
+.kbind.off { opacity: 0.6; font-size: 10px; }
+.learn:disabled { opacity: 0.35; cursor: default; }
+.learn:not(:disabled) { background: var(--btn-hi); box-shadow: inset 0 0 0 2px var(--gold); }
+
+/* ---- worn and carried ---- */
+.slots { display: grid; grid-template-columns: repeat(2, 1fr); gap: 5px; margin-bottom: 9px; }
+.kit-slot, .bag-item {
+    border: 2px solid var(--edge); background: var(--panel); padding: 5px 7px;
+}
+.kit-slot.rare, .bag-item.rare { border-color: #3d5f7a; }
+.kit-slot.fabled, .bag-item.fabled { border-color: var(--gold); }
+.kit-slot.empty { opacity: 0.5; }
+.ks-name { display: block; font-style: normal; font-size: 9px; opacity: 0.55; margin-bottom: 1px; }
+.kit-slot b, .bag-item b { display: block; font-size: 11px; }
+.kit-slot span, .bag-item span { display: block; font-size: 10px; opacity: 0.8; line-height: 1.4; }
+.bag { display: grid; grid-template-columns: repeat(2, 1fr); gap: 5px; }
+.bag-item .m-keys { margin-top: 4px; }
+.bag-head { margin-top: 4px; }
+.mini.wide { width: 100%; margin-top: 4px; padding: 2px 0; font-size: 10px; }
+.melt-all { margin-bottom: 7px; }
+.sc-tag.best { margin-top: 10px; font-size: 12px; }
+
+#d-coins { color: var(--gold); font-size: 11px; margin-top: 2px; }
+
+/* ---- the arcade half ---- */
+/* Score sits top-centre in the one place nothing else uses, and is the largest number on the
+   screen on purpose: it is the only thing in the game you keep after you die. */
+#score {
+    position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+    text-align: center; pointer-events: none;
+}
+#sc-num {
+    font-size: 26px; color: var(--gold); letter-spacing: 2px;
+    text-shadow: 2px 2px 0 #000, 0 0 12px rgba(217,164,65,0.35);
+}
+/* The multiplier and, under it, how long you have left to keep it. */
+#sc-mult { margin-top: 2px; }
+#sc-mult b {
+    display: inline-block; font-size: 14px; color: #f2e6cd;
+    background: var(--red); border: 2px solid var(--edge); padding: 0 6px;
+}
+#sc-mult i { display: block; height: 3px; margin: 2px auto 0; width: 100%; max-width: 64px; background: var(--gold); }
+#sc-pop { position: relative; height: 0; }
+.pop {
+    position: absolute; left: 50%; top: 2px; transform: translateX(-50%);
+    font-size: 13px; color: var(--gold); text-shadow: 2px 2px 0 #000; white-space: nowrap;
+    animation: popup 1.1s ease-out forwards;
+}
+@keyframes popup {
+    0%   { opacity: 0; transform: translate(-50%, 6px); }
+    18%  { opacity: 1; transform: translate(-50%, -2px); }
+    100% { opacity: 0; transform: translate(-50%, -26px); }
+}
+
+/* ---- the thing with a name ---- */
+#boss {
+    position: absolute; top: 74px; left: 50%; transform: translateX(-50%);
+    width: min(420px, 60vw); text-align: center;
+    background: var(--panel); border: 3px solid var(--edge);
+    box-shadow: inset 0 0 0 2px var(--edge-lite); padding: 5px 9px 7px;
+}
+#boss[hidden] { display: none; }
+.b-name b { font-size: 14px; color: var(--red); letter-spacing: 1px; }
+.b-name span { display: block; font-size: 9px; opacity: 0.6; margin: 1px 0 4px; }
+.bar.boss { height: 10px; }
+.bar.boss i { background: linear-gradient(#d4543f, #8a2a22); }
+
+/* ---- high scores ---- */
+.tree.scores { margin-top: 12px; }
+.hs {
+    display: grid; grid-template-columns: 18px 76px 1fr auto; gap: 6px; align-items: baseline;
+    font-size: 10px; padding: 3px 4px; border-bottom: 1px solid #191613;
+}
+.hs:last-child { border-bottom: none; }
+.hs i { font-style: normal; opacity: 0.45; }
+.hs b { color: var(--gold); font-size: 11px; text-align: right; }
+.hs span { opacity: 0.85; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hs em { font-style: normal; opacity: 0.5; }
+/* The row you just earned, so the eye finds it without being told where to look. */
+.hs.mine { background: #33291a; box-shadow: inset 0 0 0 2px var(--gold); }
+.hs.mine i, .hs.mine em { opacity: 0.8; }
+
+.final-score {
+    display: flex; align-items: baseline; justify-content: center; gap: 10px;
+    background: var(--panel-2); border: 2px solid var(--gold); padding: 8px 12px; margin: 10px 0;
+}
+.final-score i { font-style: normal; font-size: 11px; opacity: 0.7; }
+.final-score b { font-size: 26px; color: var(--gold); text-shadow: 2px 2px 0 #000; }
+.final-score em { font-style: normal; font-size: 11px; color: var(--ink); opacity: 0.8; }
+
+#d-stage { color: var(--gold); font-size: 11px; opacity: 0.85; }
+
+/* ---- the market ---- */
+.shop-head {
+    font-size: 10px; text-transform: uppercase; opacity: 0.55; letter-spacing: 1px;
+    margin: 8px 0 4px; border-bottom: 1px solid #191613; padding-bottom: 2px;
+}
+.ware {
+    border: 2px solid var(--edge); background: var(--panel); padding: 5px 7px; margin-bottom: 4px;
+}
+.ware.rare { border-color: #3d5f7a; }
+.ware.fabled { border-color: var(--gold); }
+.ware.sold { opacity: 0.4; }
+.w-top { display: flex; justify-content: space-between; align-items: baseline; }
+.w-top b { font-size: 12px; }
+.w-top i { font-style: normal; font-size: 11px; color: var(--gold); }
+/* What you cannot afford says so by going red rather than by doing nothing when clicked. */
+.w-top i.poor { color: var(--red); opacity: 0.8; }
+.ware span { display: block; font-size: 10px; opacity: 0.8; line-height: 1.4; margin-top: 2px; }
+.ware .mini:disabled { opacity: 0.35; cursor: default; }
+
+/* ---- pause ---- */
+#pause-btn {
+    position: absolute; top: 10px; left: 232px;
+    width: 30px; height: 30px; padding: 0; line-height: 1;
+    font-family: inherit; font-weight: 700; font-size: 13px; letter-spacing: 1px;
+    color: var(--ink); background: var(--panel); border: 3px solid var(--edge);
+    box-shadow: inset 0 0 0 2px var(--edge-lite);
+}
+#pause-btn:hover { background: var(--btn-hi); }
+@media (max-width: 640px) { #pause-btn { left: auto; right: 10px; top: 96px; } }
+
+/* ---- how close you are ---- */
+/* The health bar is in the top corner and your eyes are in the middle of the screen, on the thing
+   about to hit you. Dying without noticing you were nearly dead is the most avoidable bad moment
+   in the game, so the edges of the screen start bleeding instead. */
+#hurt {
+    position: absolute; inset: 0; pointer-events: none; opacity: 0;
+    background: radial-gradient(ellipse at 50% 50%, rgba(0,0,0,0) 42%, rgba(150,20,14,0.5) 78%,
+                                rgba(120,12,8,0.82) 100%);
+    transition: opacity 0.25s linear;
+}
+/* Below a quarter it also beats, at about the rate of somebody who knows they are in trouble. */
+#hurt.critical { animation: pulse 0.9s ease-in-out infinite; }
+@keyframes pulse { 0%, 100% { filter: brightness(0.75); } 50% { filter: brightness(1.35); } }
+
+/* ---- the crowd ---- */
+/* Under the score, because it is the same statement in a different language: the score is what
+   you are worth and this is whether they are enjoying it. */
+#crowd { margin-top: 5px; width: 168px; }
+#crowd i {
+    display: block; height: 5px; background: #14120f;
+    border: 2px solid var(--edge); box-shadow: inset 0 0 0 1px #000;
+}
+#crowd i::after {
+    content: ''; display: block; height: 100%; width: var(--favour, 0%);
+    background: var(--mood, #8a8275); transition: width 0.18s linear;
+}
+#crowd b {
+    display: block; font-size: 9px; letter-spacing: 2px; margin-top: 2px;
+    color: var(--mood, #8a8275); text-shadow: 1px 1px 0 #000;
+}
+/* When they are on their feet the label itself will not sit still. */
+#crowd.roaring b { animation: roar 0.55s ease-in-out infinite; }
+@keyframes roar { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1px); } }
+#crowd span { display: none; }

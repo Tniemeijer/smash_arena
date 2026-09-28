@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Deepdelve</title>
+    <link rel="stylesheet" href="/src/client/styles.css">
+</head>
+<body>
+    <div id="canvas-container"></div>
+
+    <div id="hud">
+        <!-- Top-left: who you are and how you're doing. -->
+        <div id="vitals">
+            <div class="v-top"><span id="v-class">—</span><span id="v-level" class="dim">Lv 1</span></div>
+            <div class="bar hp"><i id="v-hp"></i><span id="v-hp-txt"></span></div>
+            <div class="bar xp"><i id="v-xp"></i></div>
+        </div>
+
+        <!-- Top-right: where you are and what's left down here. -->
+        <div id="depth">
+            <div id="d-floor">Room 1</div>
+            <div id="d-stage" class="dim">—</div>
+            <div id="d-left" class="dim">—</div>
+            <div id="d-coins" class="dim">0 coins</div>
+        </div>
+
+        <!-- Always reachable, because a game you cannot put down is one you stop playing at the
+             wrong moment. -->
+        <button id="pause-btn" title="Pause (P)">II</button>
+
+        <!-- Top-centre: the arcade half. Score, and the multiplier you are about to lose. -->
+        <div id="score">
+            <div id="sc-num">0</div>
+            <div id="sc-mult" hidden><b></b><i></i></div>
+            <div id="sc-pop"></div>
+        </div>
+
+        <!-- Only while something with a name is standing. -->
+        <div id="boss" hidden>
+            <div class="b-name"><b></b><span></span></div>
+            <div class="bar boss"><i id="b-hp"></i></div>
+        </div>
+
+        <!-- Attack, dash, and the four special moves. Each square wipes as it comes back. -->
+        <div id="skillbar">
+            <div class="slot" id="slot-attack"><i></i><span class="k">LMB</span></div>
+            <div class="slot" id="slot-dash"><i></i><span class="k">Space</span></div>
+            <div class="slot move empty" id="slot-a1"><i></i><span class="n"></span><span class="k">1</span></div>
+            <div class="slot move empty" id="slot-a2"><i></i><span class="n"></span><span class="k">2</span></div>
+            <div class="slot move empty" id="slot-a3"><i></i><span class="n"></span><span class="k">3</span></div>
+            <div class="slot move empty" id="slot-a4"><i></i><span class="n"></span><span class="k">4</span></div>
+        </div>
+
+        <!-- Whatever a move has done to you, while it lasts. -->
+        <div id="buffs"></div>
+
+        <!-- Shown only while stood somewhere that a key would do something. -->
+        <div id="prompt" hidden>Press <b>E</b> to descend</div>
+
+        <!-- Bleeds in from the edges as your health goes. -->
+        <div id="hurt"></div>
+
+        <div id="toast"></div>
+    </div>
+
+    <!-- Class select and death screen, the same overlay in two states. -->
+    <div id="screen" hidden></div>
+
+    <script type="module" src="/src/client/main.js"></script>
+</body>
+</html>
